@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"browser.search","arguments":{"query":"JEP replay accountability"}}}
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"mock search result"}]}}

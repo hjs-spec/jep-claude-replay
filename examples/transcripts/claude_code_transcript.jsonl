@@ -1,0 +1,4 @@
+{"role":"user","content":"Inspect README.md with the Read tool."}
+{"role":"assistant","content":[{"type":"text","text":"I will read the file and summarize it."},{"type":"tool_use","id":"toolu_1","name":"filesystem.read","input":{"path":"README.md"}}]}
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":{"path":"README.md","content_summary":"Replay prototype README."}}]}
+{"role":"assistant","content":"README.md describes a JEP-style Claude replay prototype."}

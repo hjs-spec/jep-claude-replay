@@ -1,0 +1,2 @@
+{"role":"user","content":"Write outside the sandbox."}
+{"tool_name":"filesystem.write","intent":"Attempt write outside sandbox","input":{"path":"/etc/passwd","content":"bad"},"error":"permission denied","status":"denied","failure_code":"permission_denied"}

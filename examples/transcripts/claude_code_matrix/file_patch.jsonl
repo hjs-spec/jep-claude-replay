@@ -1,0 +1,3 @@
+{"role":"user","content":"Patch a file."}
+{"tool_name":"filesystem.read","input":{"path":"app.py"},"output":{"content":"print('hi')\n"}}
+{"tool_name":"filesystem.write","intent":"Apply patch","input":{"path":"app.py","content":"print('hi')\nprint('replay')\n"},"output":{"diff":"+print('replay')"}}

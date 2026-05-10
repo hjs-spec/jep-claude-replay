@@ -1,0 +1,8 @@
+{
+  "active_ed25519_kid": "golden-ed",
+  "active_kid": null,
+  "ed25519_seeds": {
+    "golden-ed": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+  },
+  "keys": {}
+}

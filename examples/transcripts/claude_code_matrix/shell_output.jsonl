@@ -1,0 +1,2 @@
+{"role":"user","content":"Run tests."}
+{"tool_name":"shell.run","input":{"command":"pytest -q"},"output":{"stdout":"2 passed","stderr":"","returncode":0}}
