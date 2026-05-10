@@ -1,0 +1,3 @@
+{"role":"user","content":"Run a failing mock tool."}
+{"role":"assistant","content":[{"type":"tool_use","id":"fail_1","name":"api.call","input":{"endpoint":"https://api.example.test/fail"}}]}
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"fail_1","is_error":true,"content":{"status":500,"error":"upstream failed"}}]}

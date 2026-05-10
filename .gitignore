@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Local signing/demo output
+.local/
+/tmp/
+
+# Generated replay packs are zip containers; regenerate with `jep-claude-replay pack`.
+examples/packs/*.jcrpack

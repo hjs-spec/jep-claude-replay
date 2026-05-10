@@ -1,0 +1,13 @@
+{
+  "session_id": "code-edit-session",
+  "user": "Human",
+  "user_prompt": "Add a note to a sandbox file and verify the diff.",
+  "reasoning_checkpoints": [{"summary": "Need read, safe sandbox write, then diff verification; reasoning details redacted."}],
+  "tool_calls": [
+    {"tool_name": "filesystem.read", "intent": "Read sandbox note before editing.", "input": {"path": "examples/mock_mcp_tools/sandbox/note.txt"}, "output": {"content_summary": "Initial note."}, "authority_scope": {"profile": "neutral", "authorized_by": "Human", "limits": ["workspace-read"]}, "verification_intent": "Verify pre-edit read.", "verification_state": "passed"},
+    {"tool_name": "filesystem.write", "intent": "Write proposed patch to sandbox only.", "input": {"path": "note.txt", "content": "Initial note.\nReplay note added.\n"}, "output": {"path": "examples/mock_mcp_tools/sandbox/note.txt", "bytes": 33}, "authority_scope": {"profile": "neutral", "authorized_by": "Human", "limits": ["sandbox-write-only"]}, "verification_intent": "Verify sandbox write completed.", "verification_state": "passed", "evidence_refs": [{"uri": "file://examples/mock_mcp_tools/sandbox/note.txt", "digest": "sha256:mock-note"}]},
+    {"tool_name": "shell.run", "intent": "Mock diff verification without executing a real shell command.", "input": {"command": "git diff -- examples/mock_mcp_tools/sandbox/note.txt"}, "output": {"mock": true, "stdout": "+Replay note added."}, "authority_scope": {"profile": "neutral", "authorized_by": "Human", "limits": ["mock-shell-only"]}, "verification_intent": "Verify diff contains expected line.", "verification_state": "passed"}
+  ],
+  "final_answer": "Sandbox edit completed and verified.",
+  "status": "completed"
+}

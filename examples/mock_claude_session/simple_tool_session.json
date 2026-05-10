@@ -1,0 +1,18 @@
+{
+  "session_id": "simple-tool-session",
+  "user": "Human",
+  "user_prompt": "Inspect README.md and tell me the project purpose.",
+  "reasoning_checkpoints": [{"summary": "Need to read a local file; reasoning details redacted."}],
+  "tool_calls": [{
+    "tool_name": "filesystem.read",
+    "intent": "Read README.md to answer the human's inspection request.",
+    "input": {"path": "README.md"},
+    "output": {"path": "README.md", "content_summary": "Project description for JEP-style Claude replay."},
+    "authority_scope": {"profile": "neutral", "authorized_by": "Human", "limits": ["read-only", "workspace"]},
+    "verification_intent": "Confirm the file content is sufficient to answer.",
+    "verification_state": "passed",
+    "evidence_refs": [{"uri": "file://README.md", "digest": "sha256:mock-readme"}]
+  }],
+  "final_answer": "The project replays Claude agent sessions as JEP-style accountability timelines.",
+  "status": "completed"
+}

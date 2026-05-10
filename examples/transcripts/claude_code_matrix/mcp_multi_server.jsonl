@@ -1,0 +1,3 @@
+{"role":"user","content":"Search then call API."}
+{"tool_name":"mcp.browser.search","input":{"server":"browser","query":"replay"},"output":{"results":[{"url":"https://example.com"}]}}
+{"tool_name":"mcp.api.call","input":{"server":"api","endpoint":"https://api.example.com"},"output":{"status":200}}
