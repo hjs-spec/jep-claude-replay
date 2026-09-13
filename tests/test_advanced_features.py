@@ -82,7 +82,8 @@ def test_ed25519_detached_signatures_verify_with_public_key(tmp_path):
     signed = sign_events(load_archive(path), keyring, alg="Ed25519")
     sig = signed[0]["signature"]
     assert sig["alg"] == "Ed25519" and sig["public_key"]
-    verifier = Keyring()
+    assert verify_archive_signatures(signed, Keyring())["valid"] is False
+    verifier = keyring.public_verifier()
     assert verify_archive_signatures(signed, verifier)["valid"] is True
 
 

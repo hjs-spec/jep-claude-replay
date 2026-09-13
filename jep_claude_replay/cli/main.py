@@ -34,7 +34,7 @@ def main(argv=None) -> int:
     sg = sub.add_parser("sign"); sg.add_argument("archive"); sg.add_argument("--keyring", required=True); sg.add_argument("-o", "--output", required=True); sg.add_argument("--alg", choices=["HS256", "Ed25519"] )
     vp = sub.add_parser("verify-profile"); vp.add_argument("archive"); vp.add_argument("--keyring")
     pk = sub.add_parser("pack"); pk.add_argument("archive"); pk.add_argument("-o", "--output", required=True); pk.add_argument("--evidence", action="append", default=[]); pk.add_argument("--keyring")
-    up = sub.add_parser("unpack"); up.add_argument("pack"); up.add_argument("-o", "--output-dir", required=True)
+    up = sub.add_parser("unpack"); up.add_argument("pack"); up.add_argument("-o", "--output-dir", required=True); up.add_argument("--keyring")
     args = p.parse_args(argv)
     if args.cmd == "record":
         out = args.output or f"examples/archives/{Path(args.session_json).stem}.jsonl"
@@ -57,15 +57,19 @@ def main(argv=None) -> int:
         return 0
     if args.cmd == "verify-profile":
         keyring = Keyring.load(args.keyring) if args.keyring else None
-        print(json.dumps(verify_profiles(load_archive(args.archive), keyring=keyring), indent=2))
-        return 0
+        result = verify_profiles(load_archive(args.archive), keyring=keyring, base_path=Path(args.archive).resolve().parent)
+        print(json.dumps(result, indent=2))
+        return 0 if result["valid"] else 1
     if args.cmd == "pack":
         keyring = Keyring.load(args.keyring) if args.keyring else None
-        print(json.dumps(export_pack(args.archive, args.output, evidence_paths=args.evidence, keyring=keyring), indent=2))
-        return 0
+        result = export_pack(args.archive, args.output, evidence_paths=args.evidence, keyring=keyring)
+        print(json.dumps(result, indent=2))
+        return 0 if result["verification"]["valid"] else 1
     if args.cmd == "unpack":
-        print(json.dumps(import_pack(args.pack, args.output_dir), indent=2))
-        return 0
+        keyring = Keyring.load(args.keyring) if args.keyring else None
+        result = import_pack(args.pack, args.output_dir, keyring=keyring)
+        print(json.dumps(result, indent=2))
+        return 0 if result["verification_report"]["valid"] else 1
     if args.cmd == "import-claude-code":
         events = record_claude_code_transcript(args.transcript, args.output, session_id=args.session_id)
         print(f"imported {len(events)} Claude Code events to {args.output}")

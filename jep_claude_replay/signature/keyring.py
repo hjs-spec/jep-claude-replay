@@ -6,6 +6,8 @@ verification for replay archives without requiring shared verification secrets.
 from __future__ import annotations
 
 import base64
+import os
+import tempfile
 import hmac
 import json
 import secrets
@@ -15,15 +17,12 @@ from pathlib import Path
 from typing import Any
 
 from jep_claude_replay.canonicalization.jcs import canonicalize
-from jep_claude_replay.signature.ed25519 import Ed25519KeyPair, verify_payload as verify_ed25519_payload
+from jep_claude_replay.signature.ed25519 import Ed25519KeyPair, verify_payload as verify_ed25519_payload, _b64u_decode
 
 
 def _b64u(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
-
-def _b64u_decode(text: str) -> bytes:
-    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
 @dataclass
@@ -32,9 +31,12 @@ class Keyring:
     active_kid: str | None = None
     ed25519_seeds: dict[str, bytes] = field(default_factory=dict)
     active_ed25519_kid: str | None = None
+    ed25519_public_keys: dict[str, bytes] = field(default_factory=dict)
 
     @classmethod
     def generate(cls, kid: str = "local-1", *, alg: str = "HS256") -> "Keyring":
+        if alg not in {"HS256", "Ed25519"}:
+            raise ValueError("unsupported signing algorithm")
         if alg == "Ed25519":
             pair = Ed25519KeyPair.generate(kid)
             return cls(ed25519_seeds={kid: pair.seed}, active_ed25519_kid=kid)
@@ -43,9 +45,9 @@ class Keyring:
     @classmethod
     def load(cls, path: str | Path) -> "Keyring":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        keys = {kid: _b64u_decode(raw) for kid, raw in data.get("keys", {}).items()}
-        ed = {kid: _b64u_decode(raw) for kid, raw in data.get("ed25519_seeds", {}).items()}
-        return cls(keys, data.get("active_kid"), ed, data.get("active_ed25519_kid"))
+        keys = {kid: _b64u_decode(raw.rstrip("=")) for kid, raw in data.get("keys", {}).items()}
+        ed = {kid: _b64u_decode(raw.rstrip("=")) for kid, raw in data.get("ed25519_seeds", {}).items()}
+        return cls(keys, data.get("active_kid"), ed, data.get("active_ed25519_kid"), {kid: _b64u_decode(raw.rstrip("=")) for kid, raw in data.get("ed25519_public_keys", {}).items()})
 
     def save(self, path: str | Path) -> None:
         p = Path(path)
@@ -53,12 +55,25 @@ class Keyring:
         data = {
             "active_kid": self.active_kid,
             "active_ed25519_kid": self.active_ed25519_kid,
+            "ed25519_public_keys": {kid: _b64u(raw) for kid, raw in self.ed25519_public_keys.items()},
             "keys": {kid: _b64u(key) for kid, key in self.keys.items()},
             "ed25519_seeds": {kid: _b64u(seed) for kid, seed in self.ed25519_seeds.items()},
         }
-        p.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        fd, temporary = tempfile.mkstemp(prefix=p.name + ".", dir=p.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, indent=2, sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, p)
+        finally:
+            if os.path.exists(temporary): os.unlink(temporary)
 
     def rotate(self, kid: str, *, alg: str = "HS256") -> None:
+        if kid in self.keys or kid in self.ed25519_seeds or kid in self.ed25519_public_keys:
+            raise ValueError("key rotation requires a new key identifier")
+        if alg not in {"HS256", "Ed25519"}:
+            raise ValueError("unsupported signing algorithm")
         if alg == "Ed25519":
             self.ed25519_seeds[kid] = Ed25519KeyPair.generate(kid).seed
             self.active_ed25519_kid = kid
@@ -68,6 +83,8 @@ class Keyring:
 
     def sign(self, payload: Any, kid: str | None = None, *, alg: str | None = None) -> dict[str, str]:
         chosen_alg = alg or ("Ed25519" if self.active_ed25519_kid and not self.active_kid else "HS256")
+        if chosen_alg not in {"HS256", "Ed25519"}:
+            raise ValueError("unsupported signing algorithm")
         if chosen_alg == "Ed25519":
             active = kid or self.active_ed25519_kid
             if not active or active not in self.ed25519_seeds:
@@ -79,11 +96,30 @@ class Keyring:
         mac = hmac.new(self.keys[active], canonicalize(payload).encode("utf-8"), sha256).digest()
         return {"alg": "HS256", "kid": active, "value": _b64u(mac)}
 
+    def public_verifier(self) -> "Keyring":
+        """Export only trusted Ed25519 public keys, never signing seeds."""
+        public = dict(self.ed25519_public_keys)
+        public.update({kid: Ed25519KeyPair(kid, seed).public_key for kid, seed in self.ed25519_seeds.items()})
+        return Keyring(ed25519_public_keys=public)
+
     def verify(self, payload: Any, signature: dict[str, str]) -> bool:
+        if not isinstance(signature, dict) or not isinstance(signature.get("kid"), str):
+            return False
+        kid = signature["kid"]
         if signature.get("alg") == "Ed25519":
-            return verify_ed25519_payload(payload, signature)
-        kid = signature.get("kid")
-        if signature.get("alg") != "HS256" or kid not in self.keys:
+            trusted = self.ed25519_public_keys.get(kid)
+            if kid in self.ed25519_seeds:
+                trusted = Ed25519KeyPair(kid, self.ed25519_seeds[kid]).public_key
+            if trusted is None:
+                return False
+            try:
+                embedded = signature.get("public_key")
+                if embedded is not None and _b64u_decode(embedded) != trusted:
+                    return False
+                return verify_ed25519_payload(payload, {**signature, "public_key": _b64u(trusted)})
+            except (ValueError, TypeError):
+                return False
+        if signature.get("alg") != "HS256" or kid not in self.keys or not isinstance(signature.get("value"), str):
             return False
         expected = self.sign(payload, kid, alg="HS256")["value"]
-        return hmac.compare_digest(expected, signature.get("value", ""))
+        return hmac.compare_digest(expected, signature["value"])

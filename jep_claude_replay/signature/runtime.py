@@ -7,24 +7,23 @@ from jep_claude_replay.signature.keyring import Keyring
 
 
 def sign_event(event: JEPEvent, keyring: Keyring, *, alg: str | None = None) -> JEPEvent:
-    return replace(event, signature=keyring.sign(event.hash_payload(), alg=alg))
+    return replace(event, signature=keyring.sign(_signature_payload(event.to_dict()), alg=alg))
+
+
+def _signature_payload(event: dict) -> dict:
+    payload = {k: v for k, v in event.items() if not k.startswith("_")}
+    payload["signature"] = {"alg": None, "kid": None, "value": None}
+    return payload
 
 
 def verify_event_signature(event: dict, keyring: Keyring) -> bool:
-    payload = dict(event)
-    payload.pop("_archive_line", None)
-    sig = payload.get("signature") or {}
-    payload["signature"] = {"alg": None, "kid": None, "value": None}
-    # The event model hashes mock signatures with value None. For HS256, sign the
-    # same detached payload with signature value omitted.
-    return keyring.verify(payload, sig)
+    return keyring.verify(_signature_payload(event), event.get("signature") or {})
 
 
 def sign_events(events: list[dict], keyring: Keyring, *, alg: str | None = None) -> list[dict]:
     signed: list[dict] = []
     for event in events:
-        payload = {k: v for k, v in event.items() if not k.startswith("_")}
-        payload["signature"] = {"alg": None, "kid": None, "value": None}
+        payload = _signature_payload(event)
         event = dict(event)
         event.pop("_archive_line", None)
         event["signature"] = keyring.sign(payload, alg=alg)
@@ -33,7 +32,7 @@ def sign_events(events: list[dict], keyring: Keyring, *, alg: str | None = None)
 
 
 def verify_archive_signatures(events: list[dict], keyring: Keyring) -> dict:
-    failures = []
+    failures = [] if events else ["empty_archive"]
     tampered = []
     for event in events:
         if not verify_event_signature(event, keyring):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from hashlib import sha256
 from typing import Any
 
 from jep_claude_replay.archive.runtime import load_archive
@@ -42,7 +43,7 @@ def verify_signature(events: list[dict], keyring: Keyring | None = None) -> dict
     if keyring is None:
         signed = [e for e in events if (e.get("signature") or {}).get("value")]
         if not signed:
-            return {"valid": True, "validation_level": "signature", "failure_codes": [], "warnings": ["archive has no signatures"], "tampered_events": []}
+            return {"valid": False, "validation_level": "signature", "failure_codes": ["missing_signature"], "warnings": ["archive has no signatures"], "tampered_events": []}
         return {"valid": False, "validation_level": "signature", "failure_codes": ["missing_keyring"], "warnings": [], "tampered_events": [e.get("event_id", "<unknown>") for e in signed]}
     return verify_archive_signatures(events, keyring)
 
@@ -54,21 +55,42 @@ def verify_replay(events: list[dict]) -> dict:
     return {"valid": bool(replay.get("timeline")), "validation_level": "replay", "failure_codes": [] if replay.get("timeline") else ["empty_replay"], "warnings": warnings, "tampered_events": []}
 
 
-def verify_evidence(events: list[dict], *, base_path: str | Path = ".") -> dict:
+def verify_evidence(events: list[dict], *, base_path: str | Path = ".", evidence_map: dict | None = None) -> dict:
     failures: list[str] = []
     warnings: list[str] = []
-    root = Path(base_path)
+    root = Path(base_path).resolve()
+    checked = 0
     for event in events:
         for ref in event.get("evidence_refs", []) or []:
-            uri = ref.get("uri", "")
-            if uri.startswith("file://"):
-                candidate = Path(uri.removeprefix("file://"))
-                if not candidate.is_absolute():
-                    candidate = root / candidate
-                if not candidate.exists():
-                    failures.append("missing_evidence")
-                    warnings.append(f"missing evidence for {event.get('event_id')}: {uri}")
-    return {"valid": not failures, "validation_level": "evidence", "failure_codes": sorted(set(failures)), "warnings": warnings, "tampered_events": []}
+            if not isinstance(ref, dict) or not isinstance(ref.get("uri"), str):
+                failures.append("invalid_evidence_reference")
+                continue
+            uri = ref["uri"]
+            if not uri.startswith("file://"):
+                failures.append("unsupported_evidence_uri")
+                continue
+            location = (evidence_map or {}).get(uri, uri)
+            candidate = Path(location.removeprefix("file://"))
+            candidate = (candidate if candidate.is_absolute() else root / candidate).resolve()
+            if not candidate.is_relative_to(root):
+                failures.append("evidence_outside_base_path")
+                continue
+            if not candidate.is_file():
+                failures.append("missing_evidence")
+                continue
+            if not isinstance(ref.get("digest"), str) or not ref["digest"].startswith("sha256:"):
+                failures.append("evidence_digest_missing_or_unsupported")
+                continue
+            try:
+                actual = "sha256:" + sha256(candidate.read_bytes()).hexdigest()
+            except OSError:
+                failures.append("evidence_unreadable")
+                continue
+            if actual != ref["digest"]:
+                failures.append("evidence_digest_mismatch")
+            else:
+                checked += 1
+    return {"valid": not failures, "validation_level": "evidence", "checked": checked, "failure_codes": sorted(set(failures)), "warnings": warnings, "tampered_events": []}
 
 
 def verify_policy(events: list[dict]) -> dict:
@@ -85,13 +107,13 @@ def verify_policy(events: list[dict]) -> dict:
     return {"valid": not failures, "validation_level": "policy", "failure_codes": sorted(set(failures)), "warnings": warnings, "tampered_events": []}
 
 
-def verify_profiles(events: list[dict], *, keyring: Keyring | None = None, base_path: str | Path = ".") -> dict:
+def verify_profiles(events: list[dict], *, keyring: Keyring | None = None, base_path: str | Path = ".", evidence_map: dict | None = None) -> dict:
     profiles = {
         "basic": verify_basic(events),
         "chain": verify_chain(events),
         "signature": verify_signature(events, keyring),
         "replay": verify_replay(events),
-        "evidence": verify_evidence(events, base_path=base_path),
+        "evidence": verify_evidence(events, base_path=base_path, evidence_map=evidence_map),
         "policy": verify_policy(events),
     }
     failures = sorted({code for profile in profiles.values() for code in profile.get("failure_codes", [])})
@@ -99,4 +121,4 @@ def verify_profiles(events: list[dict], *, keyring: Keyring | None = None, base_
 
 
 def verify_archive_profiles(path: str | Path, *, keyring: Keyring | None = None) -> dict:
-    return verify_profiles(load_archive(path), keyring=keyring, base_path=Path(path).parent.parent.parent if len(Path(path).parts) > 2 else ".")
+    return verify_profiles(load_archive(path), keyring=keyring, base_path=Path(path).resolve().parent)
