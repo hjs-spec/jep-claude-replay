@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jep-claude-replay"
-version = "0.1.0"
+version = "0.1.1"
 description = "Replay Claude agent sessions with JEP-compatible accountability events, tool lineage, delegation flow, and verification state."
 readme = "README.md"
 requires-python = ">=3.10"
