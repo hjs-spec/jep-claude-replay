@@ -32,6 +32,7 @@ class Keyring:
     active_kid: str | None = None
     ed25519_seeds: dict[str, bytes] = field(default_factory=dict)
     active_ed25519_kid: str | None = None
+    ed25519_public_keys: dict[str, bytes] = field(default_factory=dict)
 
     @classmethod
     def generate(cls, kid: str = "local-1", *, alg: str = "HS256") -> "Keyring":
@@ -45,7 +46,7 @@ class Keyring:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         keys = {kid: _b64u_decode(raw) for kid, raw in data.get("keys", {}).items()}
         ed = {kid: _b64u_decode(raw) for kid, raw in data.get("ed25519_seeds", {}).items()}
-        return cls(keys, data.get("active_kid"), ed, data.get("active_ed25519_kid"))
+        return cls(keys, data.get("active_kid"), ed, data.get("active_ed25519_kid"), {kid: _b64u_decode(raw) for kid, raw in data.get("ed25519_public_keys", {}).items()})
 
     def save(self, path: str | Path) -> None:
         p = Path(path)
@@ -53,6 +54,7 @@ class Keyring:
         data = {
             "active_kid": self.active_kid,
             "active_ed25519_kid": self.active_ed25519_kid,
+            "ed25519_public_keys": {kid: _b64u(raw) for kid, raw in self.ed25519_public_keys.items()},
             "keys": {kid: _b64u(key) for kid, key in self.keys.items()},
             "ed25519_seeds": {kid: _b64u(seed) for kid, seed in self.ed25519_seeds.items()},
         }
@@ -79,11 +81,30 @@ class Keyring:
         mac = hmac.new(self.keys[active], canonicalize(payload).encode("utf-8"), sha256).digest()
         return {"alg": "HS256", "kid": active, "value": _b64u(mac)}
 
+    def public_verifier(self) -> "Keyring":
+        """Export only trusted Ed25519 public keys, never signing seeds."""
+        public = dict(self.ed25519_public_keys)
+        public.update({kid: Ed25519KeyPair(kid, seed).public_key for kid, seed in self.ed25519_seeds.items()})
+        return Keyring(ed25519_public_keys=public)
+
     def verify(self, payload: Any, signature: dict[str, str]) -> bool:
+        if not isinstance(signature, dict) or not isinstance(signature.get("kid"), str):
+            return False
+        kid = signature["kid"]
         if signature.get("alg") == "Ed25519":
-            return verify_ed25519_payload(payload, signature)
-        kid = signature.get("kid")
-        if signature.get("alg") != "HS256" or kid not in self.keys:
+            trusted = self.ed25519_public_keys.get(kid)
+            if kid in self.ed25519_seeds:
+                trusted = Ed25519KeyPair(kid, self.ed25519_seeds[kid]).public_key
+            if trusted is None:
+                return False
+            try:
+                embedded = signature.get("public_key")
+                if embedded is not None and _b64u_decode(embedded) != trusted:
+                    return False
+                return verify_ed25519_payload(payload, {**signature, "public_key": _b64u(trusted)})
+            except (ValueError, TypeError):
+                return False
+        if signature.get("alg") != "HS256" or kid not in self.keys or not isinstance(signature.get("value"), str):
             return False
         expected = self.sign(payload, kid, alg="HS256")["value"]
-        return hmac.compare_digest(expected, signature.get("value", ""))
+        return hmac.compare_digest(expected, signature["value"])

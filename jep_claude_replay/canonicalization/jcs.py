@@ -1,10 +1,8 @@
-"""RFC 8785-compatible JSON Canonicalization Scheme helpers.
+"""Legacy replay JSON encoding retained to verify existing archive hashes.
 
-This module implements the JSON constraints needed by JCS/RFC 8785:
-object member sorting by Unicode code point, no insignificant whitespace,
-shortest JSON string escapes, deterministic primitive rendering, and rejection
-of non-finite numbers. It intentionally rejects floats whose ECMAScript number
-serialization cannot be represented safely by Python's stdlib renderer.
+This codec is not RFC 8785 for all Unicode keys/numbers. Do not use it for
+JEP-Core v0.6 wire events. A versioned archive migration is needed before
+changing historical hash semantics.
 """
 from __future__ import annotations
 
@@ -81,7 +79,7 @@ def _canonicalize(value: Any) -> str:
 
 
 def canonicalize(value: Any) -> str:
-    """Return RFC 8785/JCS canonical JSON text."""
+    """Return the legacy archive canonical text without rewriting old hashes."""
     return _canonicalize(value)
 
 
@@ -98,6 +96,14 @@ def payload_digest(value: Any) -> str | None:
 def redacted_preview(value: Any, limit: int = 160) -> str | None:
     if value is None:
         return None
+    # Content cannot be assumed safe merely because it has been truncated.
+    # Preview only the type/shape; raw values remain behind the caller's policy.
+    if isinstance(value, dict):
+        value = {str(key): "[REDACTED]" for key in value}
+    elif isinstance(value, (list, tuple)):
+        value = ["[REDACTED]" for _ in value]
+    else:
+        value = "[REDACTED]"
     text = canonicalize(value) if not isinstance(value, str) else value
     text = text.replace("\n", "\\n")
     return text[:limit] + ("…" if len(text) > limit else "")

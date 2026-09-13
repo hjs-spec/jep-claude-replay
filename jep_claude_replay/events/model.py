@@ -87,6 +87,7 @@ def make_event(
     timestamp: str | None = None,
     nonce: str | None = None,
     event_id: str | None = None,
+    include_previews: bool = False,
 ) -> JEPEvent:
     event = JEPEvent(
         event_id=event_id or str(uuid4()),
@@ -112,8 +113,8 @@ def make_event(
         ext=ext or {},
         ext_crit=ext_crit or [],
         evidence_refs=evidence_refs or [],
-        redacted_input_preview=redacted_preview(tool_input),
-        redacted_output_preview=redacted_preview(tool_output),
+        redacted_input_preview=redacted_preview(tool_input) if include_previews else None,
+        redacted_output_preview=redacted_preview(tool_output) if include_previews else None,
     )
     h = compute_event_hash(event)
     return JEPEvent(**{**event.to_dict(), "event_hash": h})
