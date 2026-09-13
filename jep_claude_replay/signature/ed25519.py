@@ -1,10 +1,13 @@
-"""Ed25519 detached signatures backed by cryptography/OpenSSL.
+"""Ed25519 detached signatures backed by cryptography and libsodium.
 
 The archive's existing payload canonicalization is retained for compatibility.
 Key trust is resolved by Keyring, independently of embedded public key material.
 """
 from __future__ import annotations
 import base64
+import re
+from nacl.signing import VerifyKey
+from nacl.exceptions import BadSignatureError
 import secrets
 from dataclasses import dataclass
 from typing import Any
@@ -19,7 +22,12 @@ def _b64u(raw: bytes) -> str:
 
 
 def _b64u_decode(text: str) -> bytes:
-    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+    if not isinstance(text, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", text):
+        raise ValueError("invalid base64url")
+    raw = base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+    if _b64u(raw) != text:
+        raise ValueError("non-canonical base64url")
+    return raw
 
 
 @dataclass(frozen=True)
@@ -45,9 +53,9 @@ class Ed25519KeyPair:
 
 def verify_bytes(public_key: bytes, message: bytes, signature: bytes) -> bool:
     try:
-        Ed25519PublicKey.from_public_bytes(public_key).verify(signature, message)
+        VerifyKey(public_key).verify(message, signature)
         return True
-    except (InvalidSignature, ValueError, TypeError):
+    except (BadSignatureError, InvalidSignature, ValueError, TypeError):
         return False
 
 
