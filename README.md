@@ -4,7 +4,7 @@ This project turns Claude-style agent sessions into replayable accountability ti
 
 **This is an experimental Claude session replay prototype aligned with JEP-style event semantics. It is not a normative JEP implementation and does not provide legal, compliance, or production security guarantees.**
 
-`jep-claude-replay` is not ordinary logging, not another agent framework, and not a Claude replacement. It is a replay layer that maps Claude/MCP-style execution into Judgment, Delegation, Verification, and Termination events with hash-chain accountability, detached signatures, artifact manifests, provenance adapters, and replay UI.
+This prototype has its own event envelope, signature metadata and `.jcrpack` format. Its detached signatures are not Core detached JWS. Session completion/failure labels are local instrumentation choices, not Core Termination semantics. For current signed Core 0.7 events, start with [Quickstart](https://github.com/hjs-spec/jep-quickstart).
 
 ## 1. What this is
 
@@ -193,5 +193,3 @@ jep-claude-replay unpack examples/packs/simple_tool_session.jcrpack -o /tmp/jcrp
 - `mcp_import`: imported MCP JSON-RPC transcript, Replay PASS.
 - `matrix_*`: Claude Code dialect matrix for tool failure, permission denied, file patch, shell output, and MCP multi-server flows.
 - `examples/packs/`: output directory for generated `.jcrpack` bundles; binary pack files are intentionally gitignored to keep PR diffs reviewable.
-
-Claude is not just chatting. Claude is running. And its run can be replayed.
