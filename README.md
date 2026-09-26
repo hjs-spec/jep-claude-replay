@@ -1,5 +1,14 @@
 # Claude Session Replay for JEP-style Accountability
 
+> **Maintenance: retired experiment — 2026-09-26.** Active feature development
+> has ended. Source history, releases, examples and existing archive readers are
+> retained for reproduction. Package names and historical formats are unchanged.
+
+The Claude transcript importer, prototype signatures and .jcrpack reader remain available here. The maintained Agent SDK does not import these transcripts or packs; keep this tool for historical reproduction.
+
+For new signed Core integrations, use the [maintained recording and report path](https://github.com/hjs-spec/jep-agent-sdk/blob/main/docs/INTEGRATIONS.md).
+See the [repository directory](https://github.com/hjs-spec/.github/blob/main/PROJECTS.md#retired-experiments) for maintenance status. No automatic archive migration is provided.
+
 This project turns Claude-style agent sessions into replayable accountability timelines.
 
 **This is an experimental Claude session replay prototype aligned with JEP-style event semantics. It is not a normative JEP implementation and does not provide legal, compliance, or production security guarantees.**
